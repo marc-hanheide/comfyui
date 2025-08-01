@@ -13,30 +13,30 @@ services:
         IMAGE_BASE: ${IMAGE_BASE:-ghcr.io/ai-dock/python:${PYTHON_VERSION:-3.10}-v2-cuda-12.1.1-base-22.04}
       tags:
         - "ghcr.io/ai-dock/comfyui:${IMAGE_TAG:-pytorch-${PYTORCH_VERSION:-2.3.0}-py3.10-v2-cuda-12.1.1-base-22.04}"
-        
-    image: ghcr.io/ai-dock/comfyui:${IMAGE_TAG:-pytorch-${PYTORCH_VERSION:-2.3.0}-py3.10-v2-cuda-12.1.1-base-22.04}
-    
+
+    image: lcas.lincoln.ac.uk/marc-hanheide/comfyui:latest
+
     ## For Nvidia GPU's - You probably want to uncomment this
-    #deploy:
-    #  resources:
-    #    reservations:
-    #      devices:
-    #        - driver: nvidia
-    #          count: all
-    #          capabilities: [gpu]
-    
-    devices:
-      - "/dev/dri:/dev/dri"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+#    devices:
+#      - "/dev/dri:/dev/dri"
       ## For AMD GPU
       #- "/dev/kfd:/dev/kfd"
-      
-              
+
+
     volumes:
       ## Workspace
       - ./workspace:${WORKSPACE:-/workspace/}:rshared
       # You can share /workspace/storage with other non-ComfyUI containers. See README
       #- /path/to/common_storage:${WORKSPACE:-/workspace/}storage/:rshared
-      
+
       # Will echo to root-owned authorized_keys file;
       # Avoids changing local file owner
       - ./config/authorized_keys:/root/.ssh/authorized_keys_mount
@@ -45,17 +45,17 @@ services:
       - ./build/COPY_ROOT_1/opt/ai-dock/api-wrapper:/opt/ai-dock/api-wrapper
     ports:
         # SSH available on host machine port 2222 to avoid conflict. Change to suit
-        - ${SSH_PORT_HOST:-2222}:22
+        #- ${SSH_PORT_HOST:-2222}:22
         # Caddy port for service portal
-        - ${SERVICEPORTAL_PORT_HOST:-1111}:${SERVICEPORTAL_PORT_HOST:-1111}
+        #- ${SERVICEPORTAL_PORT_HOST:-1111}:${SERVICEPORTAL_PORT_HOST:-1111}
         # ComfyUI web interface
-        - ${COMFYUI_PORT_HOST:-8188}:${COMFYUI_PORT_HOST:-8188}
+        #- ${COMFYUI_PORT_HOST:-8188}:${COMFYUI_PORT_HOST:-8188}
         # Jupyter server
-        - ${JUPYTER_PORT_HOST:-8888}:${JUPYTER_PORT_HOST:-8888}
+        #- ${JUPYTER_PORT_HOST:-8888}:${JUPYTER_PORT_HOST:-8888}
         # Syncthing
         - ${SYNCTHING_UI_PORT_HOST:-8384}:${SYNCTHING_UI_PORT_HOST:-8384}
         - ${SYNCTHING_TRANSPORT_PORT_HOST:-22999}:${SYNCTHING_TRANSPORT_PORT_HOST:-22999}
-   
+
     environment:
         # Don't enclose values in quotes
         - AUTO_UPDATE=${AUTO_UPDATE:-false}
@@ -87,3 +87,69 @@ services:
         - SYNCTHING_TRANSPORT_PORT_HOST=${SYNCTHING_TRANSPORT_PORT_HOST:-22999}
         - SYNCTHING_URL=${SYNCTHING_URL:-}
         #- PROVISIONING_SCRIPT=${PROVISIONING_SCRIPT:-}
+
+  zrok:
+    # currently requires the old version as the server hasn't been updated yet
+    image: openziti/zrok:1.0.8
+    volumes:
+      - zrok-data:/zrok/.zrok
+    environment:
+      HOME: /zrok
+      PFXLOG_NO_JSON: "true"
+    entrypoint: []
+    tty: true
+    secrets:
+      - zrok_token
+    user: root
+    links:
+      - supervisor
+
+    command: >
+      bash -c "
+
+      trap 'echo Stopping zrok service...; zrok release ${ZROK_NAME} || true;  zrok disable || true; echo Zrok service stopped.' EXIT;
+
+      (zrok -p disable || true);
+      zrok config set apiEndpoint ${ZROK_API_ENDPOINT} &&
+      zrok enable -d '${ZROK_ENV_NAME}' $(cat /run/secrets/zrok_token) &&
+      (zrok release ${ZROK_NAME} || true) &&
+      zrok reserve public -n ${ZROK_NAME} http://supervisor:8188 &&
+      zrok share reserved ${ZROK_NAME} --headless
+      "
+  zrok_login:
+    # currently requires the old version as the server hasn't been updated yet
+    image: openziti/zrok:1.0.8
+    volumes:
+      - zrok-login-data:/zrok/.zrok
+    environment:
+      HOME: /zrok
+      PFXLOG_NO_JSON: "true"
+    entrypoint: []
+    tty: true
+    secrets:
+      - zrok_token
+    user: root
+    links:
+      - supervisor
+
+    command: >
+      bash -c "
+
+      trap 'echo Stopping zrok service...; zrok release ${ZROK_NAME}login || true;  zrok disable || true; echo Zrok service stopped.' EXIT;
+
+      (zrok -p disable || true);
+      zrok config set apiEndpoint ${ZROK_API_ENDPOINT} &&
+      zrok enable -d '${ZROK_ENV_NAME}login' $(cat /run/secrets/zrok_token) &&
+      (zrok release ${ZROK_NAME}login || true) &&
+      zrok reserve public -n ${ZROK_NAME}login http://supervisor:1111 &&
+      zrok share reserved ${ZROK_NAME}login --headless
+      "
+
+
+secrets:
+  zrok_token:
+    environment: ZROK_TOKEN
+
+volumes:
+  zrok-data: {}
+  zrok-login-data: {}
