@@ -1,0 +1,3 @@
+[submodule "submodules/ReActor"]
+	path = submodules/ReActor
+	url = https://huggingface.co/datasets/Gourieff/ReActor.git

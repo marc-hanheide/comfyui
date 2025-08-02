@@ -58,6 +58,7 @@ services:
 
     environment:
         # Don't enclose values in quotes
+        - WEB_TOKEN=${WEB_TOKEN:-}
         - AUTO_UPDATE=${AUTO_UPDATE:-false}
         - DIRECT_ADDRESS=${DIRECT_ADDRESS:-127.0.0.1}
         - DIRECT_ADDRESS_GET_WAN=${DIRECT_ADDRESS_GET_WAN:-false}
