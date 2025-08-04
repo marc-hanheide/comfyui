@@ -22,7 +22,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: all
               capabilities: [gpu]
 
 #    devices:
@@ -39,8 +39,8 @@ services:
 
       # Will echo to root-owned authorized_keys file;
       # Avoids changing local file owner
-      - ./config/authorized_keys:/root/.ssh/authorized_keys_mount
-      #- ./config/provisioning/default.sh:/opt/ai-dock/bin/provisioning.sh
+      - ./config/authorized_keys:/root/.ssh/authorized_keys_mount:ro
+      - ./config/provisioning/default.sh:/opt/ai-dock/bin/provisioning.sh:ro
       # In-container development
       - ./build/COPY_ROOT_1/opt/ai-dock/api-wrapper:/opt/ai-dock/api-wrapper
     ports:

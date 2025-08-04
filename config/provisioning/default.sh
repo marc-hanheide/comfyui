@@ -21,6 +21,7 @@ PIP_PACKAGES=(
 NODES=(
     "https://github.com/ltdrdata/ComfyUI-Manager"
     "https://github.com/cubiq/ComfyUI_essentials"
+    "https://github.com/Gourieff/ComfyUI-ReActor"
 )
 
 CHECKPOINT_MODELS=(
@@ -136,18 +137,43 @@ function provisioning_get_nodes() {
             if [[ ${AUTO_UPDATE,,} != "false" ]]; then
                 printf "Updating node: %s...\n" "${repo}"
                 ( cd "$path" && git pull )
-                if [[ -e $requirements ]]; then
+                if [[ -e "${path}/install.py" ]]; then
+                   ${COMFYUI_VENV_PYTHON} "${path}/install.py"
+                elif [[ -e $requirements ]]; then
                    pip_install -r "$requirements"
                 fi
             fi
         else
             printf "Downloading node: %s...\n" "${repo}"
             git clone "${repo}" "${path}" --recursive
-            if [[ -e $requirements ]]; then
-                pip_install -r "${requirements}"
+            if [[ -e "${path}/install.py" ]]; then
+                ${COMFYUI_VENV_PYTHON} "${path}/install.py"
+            elif [[ -e $requirements ]]; then
+                pip_install -r "$requirements"
             fi
         fi
     done
+}
+
+function fix_load_unsafe() {
+    cat <<EOF >> /opt/ComfyUI/custom_nodes/__init__.py
+import torch
+import logging
+
+orig_torch_load = torch.load
+
+def torch_wrapper(*args, **kwargs):
+    logging.warning("[comfyui-unsafe-torch] I have unsafely patched `torch.load`.  The `weights_only` option of `torch.load` is forcibly disabled.")
+    kwargs['weights_only'] = False
+
+    return orig_torch_load(*args, **kwargs)
+
+torch.load = torch_wrapper
+
+NODE_CLASS_MAPPINGS = {}
+__all__ = ['NODE_CLASS_MAPPINGS']
+EOF
+
 }
 
 function provisioning_get_default_workflow() {
@@ -233,3 +259,5 @@ function provisioning_download() {
 }
 
 provisioning_start
+fix_load_unsafe
+
